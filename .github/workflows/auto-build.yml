@@ -41,15 +41,10 @@ jobs:
           cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
           cp build/libs/jar-source-reader-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-all.jar"
 
-      - name: 生成 Skill 压缩包 (Create Skill Archive)
-        run: |
-          cd dist
-          zip -r jar-source-reader.zip jar-source-reader
-
       - name: 上传构建产物 (Upload Build Artifacts)
         uses: actions/upload-artifact@v6
         with:
-          name: jar-source-reader-build
+          name: jar-source-reader
           path: |
-            dist/jar-source-reader.zip
+            dist/jar-source-reader
           if-no-files-found: error
