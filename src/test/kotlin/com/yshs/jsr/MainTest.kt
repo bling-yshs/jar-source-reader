@@ -4,6 +4,7 @@ import com.github.javaparser.StaticJavaParser
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -153,6 +154,9 @@ class MainTest {
      */
     @Test
     fun parseCommandSupportsOptionalRepositoryOptions() {
+        val mavenRepo = Paths.get("repo", "m2", "repository").toString()
+        val gradleRepo = Paths.get("repo", "gradle", "caches", "modules-2", "files-2.1").toString()
+
         val parsed = parseCommand(
             arrayOf(
                 "--group-id", "com.example",
@@ -160,14 +164,14 @@ class MainTest {
                 "--version", "1.0.0",
                 "--class-name", "com.example.Demo",
                 "--method-name", "sum",
-                "--maven-repo", "C:/Users/test/.m2/repository",
-                "--gradle-repo=C:/Users/test/.gradle/caches/modules-2/files-2.1",
+                "--maven-repo", mavenRepo,
+                "--gradle-repo=$gradleRepo",
             )
         )
 
         assertEquals("sum", parsed.methodName)
-        assertEquals("C:/Users/test/.m2/repository", parsed.mavenRepo)
-        assertEquals("C:/Users/test/.gradle/caches/modules-2/files-2.1", parsed.gradleRepo)
+        assertEquals(mavenRepo, parsed.mavenRepo)
+        assertEquals(gradleRepo, parsed.gradleRepo)
     }
 
     /**
@@ -193,21 +197,40 @@ class MainTest {
      */
     @Test
     fun repositoryCandidatesPrefersExplicitRepositoryPaths() {
+        val userHome = Paths.get("home", "test").toString()
+        val gradleUserHome = Paths.get(userHome, ".gradle").toString()
+        val mavenRepo = Paths.get("custom", "m2", "repository").toString()
+        val gradleRepo = Paths.get("custom", "gradle", "files-2.1").toString()
+
         val parsed = parseCommand(
             arrayOf(
                 "--group-id", "com.example",
                 "--artifact-id", "demo-lib",
                 "--version", "1.0.0",
                 "--class-name", "com.example.Demo",
-                "--maven-repo", "C:/custom/m2/repository",
-                "--gradle-repo", "C:/custom/gradle/files-2.1",
+                "--maven-repo", mavenRepo,
+                "--gradle-repo", gradleRepo,
             )
         )
 
-        val candidates = repositoryCandidates(parsed, "C:/Users/test", "C:/Users/test/.gradle")
+        val candidates = repositoryCandidates(parsed, userHome, gradleUserHome)
 
-        assertEquals("C:\\custom\\m2\\repository\\com\\example\\demo-lib\\1.0.0", candidates[0].path)
-        assertEquals("C:\\custom\\gradle\\files-2.1\\com.example\\demo-lib\\1.0.0", candidates[1].path)
+        val expectedMavenPath = Paths.get(
+            mavenRepo,
+            "com",
+            "example",
+            "demo-lib",
+            "1.0.0",
+        ).toString()
+        val expectedGradlePath = Paths.get(
+            gradleRepo,
+            "com.example",
+            "demo-lib",
+            "1.0.0",
+        ).toString()
+
+        assertEquals(expectedMavenPath, candidates[0].path)
+        assertEquals(expectedGradlePath, candidates[1].path)
     }
 
     /**
@@ -215,6 +238,9 @@ class MainTest {
      */
     @Test
     fun repositoryCandidatesFallsBackToDefaultRepositoryPaths() {
+        val userHome = Paths.get("home", "test").toString()
+        val gradleUserHome = Paths.get(userHome, ".gradle").toString()
+
         val parsed = parseCommand(
             arrayOf(
                 "--group-id", "com.example",
@@ -224,13 +250,29 @@ class MainTest {
             )
         )
 
-        val candidates = repositoryCandidates(parsed, "C:/Users/test", "C:/Users/test/.gradle")
+        val candidates = repositoryCandidates(parsed, userHome, gradleUserHome)
 
-        assertEquals("C:\\Users\\test\\.m2\\repository\\com\\example\\demo-lib\\1.0.0", candidates[0].path)
-        assertEquals(
-            "C:\\Users\\test\\.gradle\\caches\\modules-2\\files-2.1\\com.example\\demo-lib\\1.0.0",
-            candidates[1].path,
-        )
+        val expectedMavenPath = Paths.get(
+            userHome,
+            ".m2",
+            "repository",
+            "com",
+            "example",
+            "demo-lib",
+            "1.0.0",
+        ).toString()
+        val expectedGradlePath = Paths.get(
+            gradleUserHome,
+            "caches",
+            "modules-2",
+            "files-2.1",
+            "com.example",
+            "demo-lib",
+            "1.0.0",
+        ).toString()
+
+        assertEquals(expectedMavenPath, candidates[0].path)
+        assertEquals(expectedGradlePath, candidates[1].path)
     }
 
     /**
