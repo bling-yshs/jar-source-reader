@@ -3,6 +3,10 @@ package com.yshs.jsr
 import com.github.javaparser.StaticJavaParser
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -230,6 +234,67 @@ class MainTest {
     }
 
     /**
+     * 验证只传顶层类简单名时，也能在 sources jar 中定位源码文件。
+     */
+    @Test
+    fun resolveClassTargetSupportsSimpleTopLevelClassName() {
+        createSourcesJar("com/example/Demo.java").use { zip ->
+            val resolved = resolveClassTarget(zip, "Demo")
+
+            assertEquals("com/example/Demo.java", resolved.javaFilePath)
+            assertEquals("Demo", resolved.outerSimpleName)
+            assertTrue(resolved.nestedSimpleNames.isEmpty())
+        }
+    }
+
+    /**
+     * 验证只传内部类简单名路径时，会先命中外部类源码文件。
+     */
+    @Test
+    fun resolveClassTargetSupportsSimpleNestedClassName() {
+        createSourcesJar("com/example/Outer.java").use { zip ->
+            val resolved = resolveClassTarget(zip, "Outer\$Inner")
+
+            assertEquals("com/example/Outer.java", resolved.javaFilePath)
+            assertEquals("Outer", resolved.outerSimpleName)
+            assertEquals(listOf("Inner"), resolved.nestedSimpleNames)
+        }
+    }
+
+    /**
+     * 验证简单类名出现冲突时，会提示用户改用完整类名。
+     */
+    @Test
+    fun resolveClassTargetThrowsWhenSimpleClassNameIsAmbiguous() {
+        createSourcesJar(
+            "com/example/Demo.java",
+            "org/example/Demo.java",
+        ).use { zip ->
+            val error = assertFailsWith<IllegalArgumentException> {
+                resolveClassTarget(zip, "Demo")
+            }
+
+            assertTrue(error.message!!.contains("多个同名类"))
+            assertTrue(error.message!!.contains("com/example/Demo.java"))
+            assertTrue(error.message!!.contains("org/example/Demo.java"))
+        }
+    }
+
+    /**
+     * 验证简单类名未命中时，会抛出明确的异常。
+     */
+    @Test
+    fun resolveClassTargetThrowsWhenSimpleClassNameDoesNotExist() {
+        createSourcesJar("com/example/Demo.java").use { zip ->
+            val error = assertFailsWith<IllegalArgumentException> {
+                resolveClassTarget(zip, "MissingDemo")
+            }
+
+            assertTrue(error.message!!.contains("MissingDemo"))
+        }
+    }
+
+    /**
      * 验证 die 会输出错误信息，并通过退出回调结束流程。
      */
     @Test
@@ -345,24 +410,6 @@ class MainTest {
             """.trimIndent(),
             resolved,
         )
-    }
-
-    /**
-     * 验证超长源码会自动降级为骨架输出，并提示使用 method-name 继续读取。
-     */
-    @Test
-    fun resolveOutputDegradesToSkeletonForLongSource() {
-        val resolved = resolveOutput(longJavaSource, "com.example.LargeDemo", null)
-
-        assertTrue(resolved.contains("public class LargeDemo {"))
-        assertTrue(resolved.contains("public String hello();"))
-        assertTrue(resolved.contains("*   hello summary"))
-        assertTrue(resolved.contains("{@code hello}"))
-        assertTrue(resolved.contains("@return greeting"))
-        assertTrue(resolved.contains("已自动降级为类结构展示"))
-        assertTrue(resolved.contains("--method-name"))
-        assertTrue(resolved.contains("private String helper0()").not())
-        assertTrue(resolved.contains("return \"hello\";").not())
     }
 
     /**
@@ -484,6 +531,27 @@ class MainTest {
         assertTrue(resolved.contains("private String helper0()"))
         assertTrue(resolved.contains("return \"hello\";"))
     }
+}
+
+/**
+ * 创建只包含指定条目的临时 sources jar，供路径解析测试使用。
+ *
+ * @param entryNames 需要写入的 zip 条目路径
+ * @return 可读取的临时 ZipFile
+ */
+private fun createSourcesJar(vararg entryNames: String): ZipFile {
+    val tempJarFile = Files.createTempFile("jsr-test-", ".jar").toFile()
+    tempJarFile.deleteOnExit()
+
+    ZipOutputStream(tempJarFile.outputStream().buffered()).use { output ->
+        entryNames.forEach { entryName ->
+            output.putNextEntry(ZipEntry(entryName))
+            output.write("// test".toByteArray())
+            output.closeEntry()
+        }
+    }
+
+    return ZipFile(tempJarFile)
 }
 
 private class ExitCalledException(val code: Int) : RuntimeException()

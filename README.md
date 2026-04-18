@@ -14,63 +14,66 @@
 
 ## ✨ 项目简介
 
-本项目是一个 **AI Skill**，封装为可被 AI Agent 助手（如 Claude Code）自动调用的工具。当 Agent 需要查看 Maven / Gradle 项目中某个依赖 jar 包的源码，它可以通过此 Skill 直接读取并展示目标类、内部类或指定方法的 Java 源代码，无需你手动去翻阅源码。
+本项目是一个 **Skill**。当 Agent 需要查看 Maven / Gradle 项目中某个依赖 jar 包的源码，它可以通过此 Skill 直接读取并展示目标类、内部类或指定方法的 Java 源代码，无需你手动去翻阅源码。
 
 ### 💡 它解决了什么问题？
 
-在日常开发中，AI 助手无法直接访问 jar 包内的源码。当你请求 AI 分析某个第三方库的实现细节时，AI 只能依赖训练数据中的记忆，可能不准确或已过时。本 Skill 让 AI 能够**实时**从你本地仓库中读取真实源码，给出更精确的分析。
+在日常开发中，AI 助手无法直接访问 jar 包内的源码。当你请求 AI 分析某个第三方库的实现细节时，AI 只能依赖训练数据中的记忆，可能不准确或已过时。本 Skill 让 AI 能够实时从你本地仓库中读取真实源码，给出更精确的分析。
 
 ## 🚀 功能特性
 
-- 🔍 **类源码查看** — 通过完全限定类名，直接输出目标类的完整源码
+- 🔍 **类源码查看** — 支持传入类名或完全限定类名，直接输出目标类的完整源码
 - 🪆 **内部类支持** — 使用 `$` 分隔符可查看嵌套内部类，如 `OuterClass$InnerClass`
 - 🎯 **方法级查看** — 精确输出指定方法源码，支持重载方法一并展示
 - 📐 **智能骨架降级** — 当类源码超过 500 行时，自动输出类结构摘要（字段 + 公开方法签名），引导 AI 进一步精确查询
 - 📁 **双仓库支持** — 同时搜索 Maven（`~/.m2/repository`）和 Gradle（`~/.gradle/caches`）本地仓库
 - 🛠️ **自定义仓库路径** — 支持通过参数显式指定仓库根目录
 
-## 📖 安装部署
+## 📖 安装与使用
 
-### 1️⃣ 克隆并构建
+### 1️⃣ 下载 Skill
 
-```bash
-git clone https://github.com/bling-yshs/jar-source-reader-kt.git
-cd jar-source-reader-kt
-./gradlew build
+从 [Releases](https://github.com/bling-yshs/jar-source-reader-kt/releases/latest) 页面下载最新版本的压缩包。
+
+### 2️⃣ 放置到 Skills 目录
+
+将下载的文件解压后，放置到以下目录：
+
+```
+~/.claude/skills/jar-source-reader/
+├── SKILL.md                            # AI Skill 描述文件
+└── tool/
+    └── jar-source-reader-kt-all.jar    # 工具本体
 ```
 
-### 2️⃣ 部署 Skill
+### 3️⃣ 下载源代码（Source Jar）
 
-运行部署脚本，将 Skill 描述文件和构建产物复制到 Claude 的 skills 目录：
+在使用前，你需要确保目标依赖的 **sources jar** 已下载到本地仓库。
 
-```bash
-./copy-skill.sh
-```
+在 IntelliJ IDEA 中，打开 Maven 工具栏，点击 **「下载源代码」** 按钮即可：
 
-该脚本会将以下文件部署到 `~/.claude/skills/jar-source-reader/`：
+<div align="center">
+  <img height="500" src="assets/readme/download_sources.jpg" alt="下载源代码"/>
+</div>
 
-| 文件 | 说明 |
-|:---|:---|
-| `SKILL.md` | Skill 描述文件，告诉 AI 何时及如何调用此工具 |
-| `tool/jar-source-reader-kt-all.jar` | 构建产物（fat jar，含所有依赖） |
+### 4️⃣ 向 AI 提供目标源码信息
 
-### 3️⃣ 开始使用
+在与 AI 对话时，你需要向 AI 提供你想查看的目标类所在 jar 包的依赖坐标信息（groupId、artifactId、version），AI 就会自动调用此 Skill 读取源码。
 
-部署完成后，AI 助手在对话中检测到你需要查看 jar 依赖源码时，会自动调用此 Skill，无需手动操作。
-
-> [!TIP]
-> 确保目标依赖的 **sources jar** 已下载到本地仓库。在 Maven 项目中可通过 `mvn dependency:sources` 下载，Gradle 项目中 IDE 通常会自动下载。
+<div align="center">
+  <img src="assets/readme/usage_demo.gif" alt="使用演示"/>
+</div>
 
 ## ⚙️ 参数说明
 
-以下参数由 AI 助手在调用时自动填充：
+以下参数由 AI 助手在调用时自动填充，供开发者参考：
 
 | 参数 | 必填 | 说明 |
 |:---|:---:|:---|
 | `--group-id` | ✅ | Maven Group ID，如 `cn.hutool` |
 | `--artifact-id` | ✅ | Maven Artifact ID，如 `hutool-all` |
 | `--version` | ✅ | 依赖版本号，如 `5.8.36` |
-| `--class-name` | ✅ | 完全限定类名，如 `cn.hutool.core.util.IdUtil`；内部类使用 `$` 分隔 |
+| `--class-name` | ✅ | 类名或完全限定类名，如 `IdUtil` 或 `cn.hutool.core.util.IdUtil`；内部类使用 `$` 分隔 |
 | `--method-name` | ❌ | 方法名，传入后只输出对应方法源码；存在重载时会一并输出 |
 | `--maven-repo` | ❌ | 指定 Maven 仓库根目录，默认 `~/.m2/repository` |
 | `--gradle-repo` | ❌ | 指定 Gradle 仓库根目录，默认 `~/.gradle/caches/modules-2/files-2.1` |
@@ -93,11 +96,8 @@ jar-source-reader-kt/
 │   ├── main/kotlin/com/yshs/jsr/
 │   │   └── Main.kt                # 🚀 程序入口与核心逻辑
 │   └── test/                       # 🧪 单元测试
-├── tool/                           # 📦 构建产物（fat jar）
 ├── SKILL.md                        # 🤖 AI Skill 描述文件
-├── copy-skill.sh                   # 🔧 构建并部署到 skills 目录
-├── build.gradle.kts                # 🔨 Gradle 构建配置
-└── LICENSE                         # 📄 GPL-3.0 许可证
+└── build.gradle.kts                # 🔨 Gradle 构建配置
 ```
 
 ## 🛠️ 开发环境
@@ -106,7 +106,6 @@ jar-source-reader-kt/
 |:---:|:---:|
 | ☕ JDK | 8+ |
 | 🐘 Gradle | Wrapper 自带 |
-| 🟣 Kotlin | 2.3.20 |
 
 ## 🔗 技术栈
 

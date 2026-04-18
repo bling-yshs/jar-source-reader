@@ -63,8 +63,6 @@ fun parseCommandOrExit(args: Array<String>): SourceReadRequestParserCommand {
  * @return 目标源码或骨架输出
  */
 fun readSource(command: SourceReadRequestParserCommand): String {
-    val classTarget = parseClassTarget(command.className)
-
     val home = System.getenv("USERPROFILE")
         ?: System.getenv("HOME")
         ?: die("无法获取用户主目录")
@@ -81,6 +79,11 @@ fun readSource(command: SourceReadRequestParserCommand): String {
         )
 
     ZipFile(sourcesJar).use { zip ->
+        val classTarget = try {
+            resolveClassTarget(zip, command.className)
+        } catch (e: IllegalArgumentException) {
+            die(e.message ?: "类名解析失败")
+        }
         val entry = zip.getEntry(classTarget.javaFilePath)
             ?: die("在 sources jar 中未找到: ${classTarget.javaFilePath}")
 
@@ -147,7 +150,7 @@ class SourceReadRequestParserCommand : CliktCommand() {
     /** 依赖版本号。 */
     val version: String by option("--version").required()
 
-    /** 完全限定类名。 */
+    /** 类名或完全限定类名。 */
     val className: String by option("--class-name").required()
 
     /** 可选的方法名。 */
@@ -194,9 +197,9 @@ fun repositoryCandidates(
 }
 
 /**
- * 将完全限定类名解析成源码文件路径与嵌套类路径。
+ * 将类名解析成源码文件路径与嵌套类路径。
  *
- * @param className 完全限定类名
+ * @param className 类名或完全限定类名
  * @return 目标类解析结果
  */
 fun parseClassTarget(className: String): ClassTarget {
@@ -218,10 +221,80 @@ fun parseClassTarget(className: String): ClassTarget {
 }
 
 /**
+ * 根据用户传入的类名，在 sources jar 中解析实际源码路径。
+ *
+ * @param zip sources jar 文件
+ * @param className 类名或完全限定类名
+ * @return 可用于读取源码的目标类信息
+ */
+fun resolveClassTarget(
+    zip: ZipFile,
+    className: String,
+): ClassTarget {
+    val classTarget = parseClassTarget(className)
+    if (isFullyQualifiedClassName(className)) {
+        return classTarget
+    }
+
+    val matchedJavaFilePaths = findJavaFilePathsBySimpleClassName(zip, classTarget.outerSimpleName)
+    if (matchedJavaFilePaths.isEmpty()) {
+        throw IllegalArgumentException("在 sources jar 中未找到类名: $className")
+    }
+
+    if (matchedJavaFilePaths.size > 1) {
+        throw IllegalArgumentException(
+            buildString {
+                appendLine("在 sources jar 中找到了多个同名类: $className")
+                appendLine("请改用完整类名。候选路径如下:")
+                matchedJavaFilePaths.forEach { javaFilePath ->
+                    appendLine("  $javaFilePath")
+                }
+            }.trimEnd()
+        )
+    }
+
+    return classTarget.copy(javaFilePath = matchedJavaFilePaths.single())
+}
+
+/**
+ * 判断传入的类名是否包含完整包路径。
+ *
+ * @param className 类名或完全限定类名
+ * @return 包含包路径时返回 true
+ */
+fun isFullyQualifiedClassName(className: String): Boolean {
+    return className.substringBefore('$').contains('.')
+}
+
+/**
+ * 在 sources jar 中按顶层类名查找匹配的 Java 源文件。
+ *
+ * @param zip sources jar 文件
+ * @param simpleClassName 顶层类简单名
+ * @return 匹配到的 Java 源文件路径列表
+ */
+fun findJavaFilePathsBySimpleClassName(
+    zip: ZipFile,
+    simpleClassName: String,
+): List<String> {
+    val matchedJavaFilePaths = mutableListOf<String>()
+    val entries = zip.entries()
+    while (entries.hasMoreElements()) {
+        val entry = entries.nextElement()
+        val isMatchedJavaFile = entry.name == "$simpleClassName.java" || entry.name.endsWith("/$simpleClassName.java")
+        if (!entry.isDirectory && isMatchedJavaFile) {
+            matchedJavaFilePaths += entry.name
+        }
+    }
+
+    return matchedJavaFilePaths
+}
+
+/**
  * 根据是否传入方法名，返回目标类源码、重载方法源码或超长源码的骨架结构。
  *
  * @param source Java 源码文本
- * @param className 完全限定类名
+ * @param className 类名或完全限定类名
  * @param methodName 可选的方法名
  * @param ignoreLengthLimit 是否忽略长度限制
  * @param lineLimit 最大行数限制
@@ -372,7 +445,7 @@ fun renderSkeleton(
     builder.append('\n')
     builder.append("提示：该类源码超过 ")
     builder.append(lineLimit)
-    builder.append(" 行，已自动降级为类结构展示。请根据上述结构，重新调用本工具并传入具体的 --method-name 以查看具体实现。")
+    builder.append(" 行，已自动降级为类结构展示。如需查看完整源码，请传递 --ignore-length-limit 参数")
     return builder.toString().trim()
 }
 
