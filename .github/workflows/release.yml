@@ -68,6 +68,9 @@ jobs:
       - name: 配置 Gradle (Setup Gradle)
         uses: gradle/actions/setup-gradle@v5
 
+      - name: 授予 Gradle Wrapper 执行权限 (Grant Gradle Wrapper Execute Permission)
+        run: chmod +x gradlew
+
       - name: 运行 build 构建 (Run Gradle Build)
         run: ./gradlew build
 
