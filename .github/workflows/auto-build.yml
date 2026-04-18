@@ -1,0 +1,52 @@
+name: 🔍 自动构建 (Auto Build)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request_target:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 构建并校验 Skill (Build and Verify Skill)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v6
+
+      - name: 安装 Java (Install Java)
+        uses: actions/setup-java@v5
+        with:
+          distribution: liberica
+          java-version: '21'
+
+      - name: 配置 Gradle (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: 运行 build 构建 (Run Gradle Build)
+        run: ./gradlew build
+
+      - name: 整理 Skill 目录 (Prepare Skill Directory)
+        run: |
+          PACKAGE_ROOT="dist/jar-source-reader"
+          mkdir -p "$PACKAGE_ROOT/tool"
+          cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
+          cp build/libs/jar-source-reader-kt-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-kt-all.jar"
+
+      - name: 生成 Skill 压缩包 (Create Skill Archive)
+        run: |
+          cd dist
+          zip -r jar-source-reader.zip jar-source-reader
+
+      - name: 上传构建产物 (Upload Build Artifacts)
+        uses: actions/upload-artifact@v6
+        with:
+          name: jar-source-reader-build
+          path: |
+            dist/jar-source-reader.zip
+          if-no-files-found: error

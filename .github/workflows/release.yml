@@ -1,0 +1,97 @@
+name: 🚀 发布 GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '发布标签，例如 v1.0.0'
+        required: true
+        type: string
+      release_name:
+        description: 'Release 名称，默认与标签一致'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 构建并发布 (Build and Release)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: 确定发布信息 (Resolve Release Metadata)
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.tag_name }}"
+            RELEASE_NAME="${{ inputs.release_name }}"
+          else
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            RELEASE_NAME=""
+          fi
+
+          if [ -z "$TAG_NAME" ]; then
+            echo "::error::缺少发布标签"
+            exit 1
+          fi
+
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="$TAG_NAME"
+          fi
+
+          VERSION="${TAG_NAME#v}"
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Java (Install Java)
+        uses: actions/setup-java@v5
+        with:
+          distribution: liberica
+          java-version: '21'
+
+      - name: 配置 Gradle (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: 运行 build 构建 (Run Gradle Build)
+        run: ./gradlew build
+
+      - name: 整理 Skill 发布目录 (Prepare Release Directory)
+        run: |
+          PACKAGE_ROOT="dist/jar-source-reader"
+          mkdir -p "$PACKAGE_ROOT/tool"
+          cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
+          cp build/libs/jar-source-reader-kt-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-kt-all.jar"
+
+      - name: 生成发布压缩包 (Create Release Archive)
+        run: |
+          cd dist
+          zip -r "jar-source-reader-${{ steps.meta.outputs.version }}.zip" jar-source-reader
+
+      - name: 发布到 GitHub (Publish to GitHub)
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
+          commit: ${{ github.sha }}
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          artifacts: |
+            dist/jar-source-reader-${{ steps.meta.outputs.version }}.zip
