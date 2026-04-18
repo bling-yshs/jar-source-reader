@@ -76,7 +76,7 @@ jobs:
           PACKAGE_ROOT="dist/jar-source-reader"
           mkdir -p "$PACKAGE_ROOT/tool"
           cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
-          cp build/libs/jar-source-reader-kt-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-kt-all.jar"
+          cp build/libs/jar-source-reader-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-all.jar"
 
       - name: 生成发布压缩包 (Create Release Archive)
         run: |

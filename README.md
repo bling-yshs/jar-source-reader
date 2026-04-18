@@ -6,9 +6,9 @@
 <br>
 
 <div align="center">
-  <a href="https://github.com/bling-yshs/jar-source-reader-kt/stargazers"><img src="https://img.shields.io/github/stars/bling-yshs/jar-source-reader-kt?logo=github&color=yellow" alt="Stars"></a>
-  <a href="https://github.com/bling-yshs/jar-source-reader-kt/releases/latest"><img src="https://img.shields.io/github/v/release/bling-yshs/jar-source-reader-kt?label=Release&color=brightgreen" alt="Release"></a>
-  <a href="https://github.com/bling-yshs/jar-source-reader-kt/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bling-yshs/jar-source-reader-kt.svg?color=orange" alt="License"></a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/stargazers"><img src="https://img.shields.io/github/stars/bling-yshs/jar-source-reader?logo=github&color=yellow" alt="Stars"></a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/releases/latest"><img src="https://img.shields.io/github/v/release/bling-yshs/jar-source-reader?label=Release&color=brightgreen" alt="Release"></a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bling-yshs/jar-source-reader.svg?color=orange" alt="License"></a>
 </div>
 <br>
 
@@ -33,7 +33,7 @@
 
 ### 1️⃣ 下载 Skill
 
-从 [Releases](https://github.com/bling-yshs/jar-source-reader-kt/releases/latest) 页面下载最新版本的压缩包。
+从 [Releases](https://github.com/bling-yshs/jar-source-reader/releases/latest) 页面下载最新版本的压缩包。
 
 ### 2️⃣ 放置到 Skills 目录
 
@@ -43,7 +43,7 @@
 ~/.claude/skills/jar-source-reader/
 ├── SKILL.md                            # AI Skill 描述文件
 └── tool/
-    └── jar-source-reader-kt-all.jar    # 工具本体
+    └── jar-source-reader-all.jar    # 工具本体
 ```
 
 ### 3️⃣ 下载源代码（Source Jar）
@@ -91,7 +91,7 @@
 ## 📂 项目结构
 
 ```
-jar-source-reader-kt/
+jar-source-reader/
 ├── src/
 │   ├── main/kotlin/com/yshs/jsr/
 │   │   └── Main.kt                # 🚀 程序入口与核心逻辑

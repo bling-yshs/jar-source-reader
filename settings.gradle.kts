@@ -1,1 +1,1 @@
-rootProject.name = "jar-source-reader-kt"
+rootProject.name = "jar-source-reader"

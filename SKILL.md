@@ -8,7 +8,7 @@ description: 如果需要读取当前 Maven 或者 Gradle 项目，引入的 jar
 当用户需要查看某个依赖 jar 包的源码时，使用以下工具读取：
 
 ``` bash
-cd /path/to/this/skill && java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar
+cd /path/to/this/skill && java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-all.jar
 ```
 
 ### 参数说明
@@ -27,19 +27,19 @@ cd /path/to/this/skill && java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-read
 ### 使用示例
 
 ```bash
-java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --method-name=fastSimpleUUID
+java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --method-name=fastSimpleUUID
 ```
 
 如果只知道类名，也可以直接这样传：
 
 ```bash
-java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=IdUtil
+java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=IdUtil
 ```
 
 如果要读取内部类，可以这样传：
 
 ```bash
-java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil$Inner
+java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil$Inner
 ```
 
 如果提示存在多个同名类，就改成完整类名再传一次。
@@ -47,5 +47,5 @@ java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar --group-id=c
 如果需要显式指定本地仓库目录，可以这样传：
 
 ```bash
-java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-kt-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --maven-repo=C:/Users/yshs/.m2/repository --gradle-repo=C:/Users/yshs/.gradle/caches/modules-2/files-2.1
+java -Dfile.encoding=UTF-8 -jar ./tool/jar-source-reader-all.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --maven-repo=C:/Users/yshs/.m2/repository --gradle-repo=C:/Users/yshs/.gradle/caches/modules-2/files-2.1
 ```
