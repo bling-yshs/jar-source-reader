@@ -7,9 +7,15 @@
 <br>
 
 <div align="center">
-  <a href="https://github.com/bling-yshs/jar-source-reader/stargazers"><img src="https://img.shields.io/github/stars/bling-yshs/jar-source-reader?logo=github&color=yellow" alt="Stars"></a>
-  <a href="https://github.com/bling-yshs/jar-source-reader/releases/latest"><img src="https://img.shields.io/github/v/release/bling-yshs/jar-source-reader?label=Release&color=brightgreen" alt="Release"></a>
-  <a href="https://github.com/bling-yshs/jar-source-reader/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bling-yshs/jar-source-reader.svg?color=orange" alt="License"></a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/stargazers">
+    <img src="https://img.shields.io/github/stars/bling-yshs/jar-source-reader?logo=github&color=yellow&label=Stars" alt="Stars">
+  </a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/releases/latest">
+    <img src="https://img.shields.io/github/v/release/bling-yshs/jar-source-reader?color=brightgreen&label=Release" alt="Release">
+  </a>
+  <a href="https://github.com/bling-yshs/jar-source-reader/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/bling-yshs/jar-source-reader?color=orange&label=License" alt="License">
+  </a>
 </div>
 <br>
 
