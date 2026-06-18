@@ -84,7 +84,7 @@ jobs:
       - name: 生成发布压缩包 (Create Release Archive)
         run: |
           cd dist
-          zip -r "jar-source-reader-${{ steps.meta.outputs.version }}.zip" jar-source-reader
+          zip -r "jar-source-reader.zip" jar-source-reader
 
       - name: 发布到 GitHub (Publish to GitHub)
         uses: ncipollo/release-action@v1
@@ -97,4 +97,4 @@ jobs:
           artifactErrorsFailBuild: true
           generateReleaseNotes: true
           artifacts: |
-            dist/jar-source-reader-${{ steps.meta.outputs.version }}.zip
+            dist/jar-source-reader.zip
