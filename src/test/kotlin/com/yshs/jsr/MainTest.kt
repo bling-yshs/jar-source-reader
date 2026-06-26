@@ -193,6 +193,41 @@ class MainTest {
     }
 
     /**
+     * 验证 fuzzy 模式允许只传类名。
+     */
+    @Test
+    fun parseCommandSupportsFuzzyModeWithoutMavenCoordinates() {
+        val parsed = parseCommand(
+            arrayOf(
+                "--mode=fuzzy",
+                "--class-name",
+                "IdUtil",
+            )
+        )
+
+        assertEquals("fuzzy", parsed.mode)
+        assertEquals("IdUtil", parsed.className)
+        assertNull(parsed.groupId)
+        assertNull(parsed.artifactId)
+        assertNull(parsed.version)
+    }
+
+    /**
+     * 验证未显式传入模式时，默认使用 fuzzy。
+     */
+    @Test
+    fun parseCommandDefaultsToFuzzyMode() {
+        val parsed = parseCommand(
+            arrayOf(
+                "--class-name",
+                "com.example.Demo",
+            )
+        )
+
+        assertEquals("fuzzy", parsed.mode)
+    }
+
+    /**
      * 验证用户显式传入仓库目录时，会优先使用这些目录。
      */
     @Test

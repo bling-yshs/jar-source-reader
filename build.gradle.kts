@@ -28,6 +28,14 @@ application {
     mainClass.set("com.yshs.jsr.MainKt")
 }
 
+tasks.shadowJar {
+    archiveClassifier.set("")
+}
+
+tasks.jar {
+    archiveClassifier.set("plain")
+}
+
 tasks.test {
     useJUnitPlatform()
 }

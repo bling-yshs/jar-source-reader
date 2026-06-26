@@ -86,7 +86,7 @@
 ~/.claude/skills/jar-source-reader/
 ├── SKILL.md                            # AI Skill 描述文件
 └── tool/
-    └── jar-source-reader-all.jar    # 工具本体
+    └── jar-source-reader.jar        # 工具本体
 ```
 
 ### 3️⃣ 下载源代码（Source Jar）
