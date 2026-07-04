@@ -2,6 +2,7 @@ package com.yshs.jsr
 
 import com.github.javaparser.StaticJavaParser
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -10,6 +11,7 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -225,6 +227,89 @@ class MainTest {
         )
 
         assertEquals("fuzzy", parsed.mode)
+    }
+
+    /**
+     * 验证 Maven 命令优先使用当前系统对应的项目内 Wrapper。
+     */
+    @Test
+    fun resolveMavenCommandPrefersOsSpecificWrapper() {
+        val projectDir = Files.createTempDirectory("jsr-maven-wrapper-").toFile()
+        val windowsWrapper = File(projectDir, "mvnw.cmd")
+        val unixWrapper = File(projectDir, "mvnw")
+        windowsWrapper.createNewFile()
+        unixWrapper.createNewFile()
+
+        assertEquals(windowsWrapper.path, resolveMavenCommand(projectDir, "Windows 11"))
+        assertEquals(unixWrapper.path, resolveMavenCommand(projectDir, "Linux"))
+    }
+
+    /**
+     * 验证没有 Maven Wrapper 时回退到系统 mvn 命令。
+     */
+    @Test
+    fun resolveMavenCommandFallsBackToSystemMaven() {
+        val projectDir = Files.createTempDirectory("jsr-maven-system-").toFile()
+
+        assertEquals("mvn.cmd", resolveMavenCommand(projectDir, "Windows 11"))
+        assertEquals("mvn", resolveMavenCommand(projectDir, "Linux"))
+    }
+
+    /**
+     * 验证 Gradle Wrapper 文件名会按操作系统选择。
+     */
+    @Test
+    fun resolveGradleWrapperFileUsesOsSpecificName() {
+        val projectDir = Files.createTempDirectory("jsr-gradle-wrapper-").toFile()
+
+        assertEquals(
+            File(projectDir, "gradlew.bat").path,
+            resolveGradleWrapperFile(projectDir, "Windows 11").path,
+        )
+        assertEquals(
+            File(projectDir, "gradlew").path,
+            resolveGradleWrapperFile(projectDir, "Linux").path,
+        )
+    }
+
+    /**
+     * 验证 Windows 系统名称判断。
+     */
+    @Test
+    fun isWindowsOsReturnsTrueOnlyForWindowsNames() {
+        assertTrue(isWindowsOs("Windows 11"))
+        assertFalse(isWindowsOs("Linux"))
+    }
+
+    /**
+     * 验证 classpath 解析会保留已存在的 jar 并过滤空白项。
+     */
+    @Test
+    fun parseClasspathJarFilesKeepsExistingJarFiles() {
+        val tempDir = Files.createTempDirectory("jsr-classpath-")
+        val firstJar = Files.createTempFile(tempDir, "first-", ".jar").toFile()
+        val secondJar = Files.createTempFile(tempDir, "second-", ".jar").toFile()
+        val classpath = listOf(firstJar.path, " ", secondJar.path).joinToString(";")
+
+        val jars = parseClasspathJarFiles(classpath, ";")
+
+        assertEquals(listOf(firstJar, secondJar), jars)
+    }
+
+    /**
+     * 验证 classpath 解析会忽略不存在的路径和非 jar 文件。
+     */
+    @Test
+    fun parseClasspathJarFilesIgnoresMissingAndNonJarFiles() {
+        val tempDir = Files.createTempDirectory("jsr-classpath-filter-")
+        val jarFile = Files.createTempFile(tempDir, "demo-", ".jar").toFile()
+        val textFile = Files.createTempFile(tempDir, "demo-", ".txt").toFile()
+        val missingJar = File(tempDir.toFile(), "missing.jar")
+        val classpath = listOf(jarFile.path, textFile.path, missingJar.path).joinToString("|")
+
+        val jars = parseClasspathJarFiles(classpath, "|")
+
+        assertEquals(listOf(jarFile), jars)
     }
 
     /**

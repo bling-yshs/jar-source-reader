@@ -6,7 +6,7 @@ description: 如果需要读取当前 Maven 或者 Gradle 项目，引入的 jar
 ## 前置需求
 
 - 你必须提前获知本 skill 所在的路径，下方的 /path/to/this/skill 则代表本 skill 的路径
-- 你必须直到当前项目是 gradle 还是 maven 项目，通过查看根目录下是否存在 gradlew 可以判断
+- 你必须知道当前项目是 Gradle 还是 Maven 项目：根目录存在 `gradlew` / `gradlew.bat` 时按 Gradle 项目处理，存在 `pom.xml` 时按 Maven 项目处理
 
 ## 使用
 
@@ -42,7 +42,7 @@ java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar
 java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=fuzzy --class-name=IdUtil
 ```
 
- `fuzzy` 模式会先在当前项目的依赖 jar 中定位目标 class，再反查对应的 sources jar。若只命中一个 sources jar，则直接读取源码；若命中多个，会提示改用更完整的类名。
+ `fuzzy` 模式会先在当前 Gradle / Maven 项目的依赖 jar 中定位目标 class，再反查对应的 sources jar。若只命中一个 sources jar，则直接读取源码；若命中多个，会提示改用更完整的类名。
 
 如果要读取内部类，可以这样传：
 

@@ -15,6 +15,7 @@ import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.body.TypeDeclaration
 import java.io.File
 import java.io.PrintStream
+import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.zip.ZipFile
 import kotlin.system.exitProcess
@@ -82,52 +83,13 @@ fun readSource(command: SourceReadRequestParserCommand): String {
     }
 
     if (mode == MODE_FUZZY) {
-        val location = SourceReadRequestParserCommand::class.java.protectionDomain.codeSource.location
-            ?: die("无法获取 jar-source-reader 所在路径")
-        val currentFile = File(location.toURI())
-        val toolDir = currentFile.parentFile ?: die("无法获取 jar-source-reader 所在目录")
-        val initScript = File(toolDir, "print-all-jar.gradle")
-        if (!initScript.isFile) {
-            die("未找到 Gradle init script: ${initScript.absolutePath}")
-        }
-
-        val gradlew = if (System.getProperty("os.name").lowercase().contains("windows")) {
-            File("./gradlew.bat")
-        } else {
-            File("./gradlew")
-        }
-        if (!gradlew.isFile) {
-            die("当前目录未找到 Gradle Wrapper: ${gradlew.absolutePath}")
-        }
-
-        val process = ProcessBuilder(
-            gradlew.path,
-            "-q",
-            "--init-script",
-            initScript.absolutePath,
-            "printAllJar",
-        )
-            .redirectErrorStream(true)
-            .start()
-
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        if (exitCode != 0) {
-            die("执行 printAllJar 失败，退出码: $exitCode\n$output")
-        }
-
         val repositoryContext = buildRepositoryContext(command)
         val mavenRepoBase = repositoryContext.mavenRepoBase
         val gradleRepoBase = repositoryContext.gradleRepoBase
         val exactClassFilePath = command.className.replace('.', '/') + ".class"
         val simpleClassFilePath = command.className.substringAfterLast('.') + ".class"
         val hasPackageName = command.className.substringBefore('$').contains('.')
-        val jarFiles = output.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { File(it) }
-            .filter { it.isFile }
-            .toList()
+        val jarFiles = collectFuzzyDependencyJarFiles()
         val matchedSourcesByClassName = linkedMapOf<String, MutableSet<String>>()
 
         jarFiles.forEach { jarFile ->
@@ -331,6 +293,174 @@ fun parseCommand(args: Array<String>): SourceReadRequestParserCommand {
     val command = SourceReadRequestParserCommand()
     command.parse(args)
     return command
+}
+
+/**
+ * 获取 fuzzy 模式需要扫描的项目依赖 jar。
+ *
+ * @return 当前项目依赖 jar 文件列表
+ */
+fun collectFuzzyDependencyJarFiles(): List<File> {
+    val projectDir = File(".")
+    val gradlew = resolveGradleWrapperFile(projectDir)
+    if (gradlew.isFile) {
+        return collectGradleDependencyJarFiles(gradlew)
+    }
+
+    if (File(projectDir, "pom.xml").isFile) {
+        return collectMavenDependencyJarFiles(projectDir)
+    }
+
+    die("当前目录未找到 Gradle Wrapper 或 pom.xml，无法使用 fuzzy 模式")
+}
+
+/**
+ * 获取当前系统对应的 Gradle Wrapper 文件。
+ *
+ * @param projectDir 项目目录
+ * @param osName 操作系统名称
+ * @return 当前系统应使用的 Gradle Wrapper 文件
+ */
+fun resolveGradleWrapperFile(
+    projectDir: File,
+    osName: String = System.getProperty("os.name"),
+): File {
+    return if (isWindowsOs(osName)) {
+        File(projectDir, "gradlew.bat")
+    } else {
+        File(projectDir, "gradlew")
+    }
+}
+
+/**
+ * 通过 Gradle init script 获取当前项目所有依赖 jar。
+ *
+ * @param gradlew Gradle Wrapper 文件
+ * @return 当前项目依赖 jar 文件列表
+ */
+fun collectGradleDependencyJarFiles(gradlew: File): List<File> {
+    val location = SourceReadRequestParserCommand::class.java.protectionDomain.codeSource.location
+        ?: die("无法获取 jar-source-reader 所在路径")
+    val currentFile = File(location.toURI())
+    val toolDir = currentFile.parentFile ?: die("无法获取 jar-source-reader 所在目录")
+    val initScript = File(toolDir, "print-all-jar.gradle")
+    if (!initScript.isFile) {
+        die("未找到 Gradle init script: ${initScript.absolutePath}")
+    }
+
+    val process = ProcessBuilder(
+        gradlew.path,
+        "-q",
+        "--init-script",
+        initScript.absolutePath,
+        "printAllJar",
+    )
+        .redirectErrorStream(true)
+        .start()
+
+    val output = process.inputStream.bufferedReader().readText()
+    val exitCode = process.waitFor()
+    if (exitCode != 0) {
+        die("执行 printAllJar 失败，退出码: $exitCode\n$output")
+    }
+
+    return output.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { File(it) }
+        .filter { it.isFile }
+        .toList()
+}
+
+/**
+ * 通过 Maven Dependency Plugin 获取当前项目所有依赖 jar。
+ *
+ * @param projectDir 项目目录
+ * @return 当前项目依赖 jar 文件列表
+ */
+fun collectMavenDependencyJarFiles(projectDir: File): List<File> {
+    val outputFile = Files.createTempFile("jar-source-reader-classpath-", ".txt").toFile()
+    try {
+        val process = ProcessBuilder(
+            resolveMavenCommand(projectDir),
+            "-q",
+            "dependency:build-classpath",
+            "-Dmdep.outputFile=${outputFile.absolutePath}",
+        )
+            .directory(projectDir)
+            .redirectErrorStream(true)
+            .start()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            die("执行 dependency:build-classpath 失败，退出码: $exitCode\n$output")
+        }
+
+        val jarFiles = parseClasspathJarFiles(outputFile.readText())
+        if (jarFiles.isEmpty()) {
+            die("dependency:build-classpath 未输出任何依赖 jar")
+        }
+
+        return jarFiles
+    } finally {
+        outputFile.delete()
+    }
+}
+
+/**
+ * 获取 Maven 命令，优先使用项目内 Maven Wrapper。
+ *
+ * @param projectDir 项目目录
+ * @param osName 操作系统名称
+ * @return Maven 命令路径或系统 mvn 命令
+ */
+fun resolveMavenCommand(
+    projectDir: File,
+    osName: String = System.getProperty("os.name"),
+): String {
+    val isWindows = isWindowsOs(osName)
+    val wrapper = if (isWindows) {
+        File(projectDir, "mvnw.cmd")
+    } else {
+        File(projectDir, "mvnw")
+    }
+
+    return if (wrapper.isFile) {
+        wrapper.path
+    } else if (isWindows) {
+        "mvn.cmd"
+    } else {
+        "mvn"
+    }
+}
+
+/**
+ * 解析 Maven classpath 输出中的 jar 文件。
+ *
+ * @param classpath classpath 文本
+ * @param pathSeparator classpath 路径分隔符
+ * @return 已存在的 jar 文件列表
+ */
+fun parseClasspathJarFiles(
+    classpath: String,
+    pathSeparator: String = File.pathSeparator,
+): List<File> {
+    return classpath.split(pathSeparator)
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { File(it) }
+        .filter { it.isFile && it.name.endsWith(".jar") }
+}
+
+/**
+ * 判断当前运行环境是否为 Windows。
+ *
+ * @param osName 操作系统名称
+ * @return Windows 系统返回 true
+ */
+fun isWindowsOs(osName: String = System.getProperty("os.name")): Boolean {
+    return osName.lowercase().contains("windows")
 }
 
 /**
