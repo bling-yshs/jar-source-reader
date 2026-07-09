@@ -79,7 +79,8 @@
 ~/.claude/skills/jar-source-reader/
 ├── SKILL.md                            # AI Skill 描述文件
 └── tool/
-    └── jar-source-reader.jar        # 工具本体
+    ├── jar-source-reader.jar           # 工具本体
+    └── print-all-jar.gradle            # Gradle 依赖扫描脚本
 ```
 
 ### 3️⃣ 下载源代码（Source Jar）
@@ -124,6 +125,7 @@ jar-source-reader/
 │   │   └── Main.kt                # 🚀 程序入口与核心逻辑
 │   └── test/                       # 🧪 单元测试
 ├── SKILL.md                        # 🤖 AI Skill 描述文件
+├── print-all-jar.gradle            # 🐘 Gradle 依赖扫描脚本
 └── build.gradle.kts                # 🔨 Gradle 构建配置
 ```
 
