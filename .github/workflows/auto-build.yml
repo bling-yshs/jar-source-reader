@@ -39,7 +39,8 @@ jobs:
           PACKAGE_ROOT="dist/jar-source-reader"
           mkdir -p "$PACKAGE_ROOT/tool"
           cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
-          cp build/libs/jar-source-reader-all.jar "$PACKAGE_ROOT/tool/jar-source-reader-all.jar"
+          cp build/libs/jar-source-reader.jar "$PACKAGE_ROOT/tool/jar-source-reader.jar"
+          cp print-all-jar.gradle "$PACKAGE_ROOT/tool/print-all-jar.gradle"
 
       - name: 上传构建产物 (Upload Build Artifacts)
         uses: actions/upload-artifact@v6
