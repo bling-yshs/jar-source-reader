@@ -13,45 +13,75 @@ description: 如果需要读取当前 Maven 或者 Gradle 项目，引入的 jar
 当用户需要查看某个依赖 jar 包的源码时，使用以下工具读取：
 
 ``` bash
-java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar
+java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=<exact|fuzzy|search>
 ```
 
 ### 参数说明
 
-| 参数 | 必填条件 | 说明                                                                                  |
-|------|----------|-------------------------------------------------------------------------------------|
-| `--mode` | 否 | 类搜索模式，可选 `exact` 或 `fuzzy`，默认 `fuzzy`                                           |
-| `--group-id` | 仅 `exact` 模式 | Maven group ID，例如 `cn.hutool`                          |
-| `--artifact-id` | 仅 `exact` 模式 | Maven artifact ID，例如 `hutool-all`                          |
-| `--version` | 仅 `exact` 模式 | 版本号，例如 `5.8.36`                                        |
-| `--class-name` | 是 | 类名或完全限定类名，例如 `IdUtil` 或 `cn.hutool.core.util.IdUtil`；读取内部类时可写成 `IdUtil$Inner` 或 `cn.hutool.core.util.IdUtil$Inner`。如果 sources jar 里有多个同名类，需要改传完整类名 |
-| `--method-name` | 否 | 方法名，例如 `fastSimpleUUID`；不传入则展示整个类的源码，传入后只输出对应方法的源码，若存在方法重载会输出所有同名方法                 |
-| `--maven-repo` | 否 | 指定 Maven 仓库根目录，例如 `C:/Users/yshs/.m2/repository`；不传则使用默认路径                         |
-| `--gradle-repo` | 否 | 指定 Gradle 仓库根目录，例如 `C:/Users/yshs/.gradle/caches/modules-2/files-2.1`；不传则使用默认路径      |
-| `--ignore-length-limit` | 否 | 忽略源码行数限制（默认超过 500 行时，只展示源码骨架）                                                   |
+#### exact 模式
 
-### 使用示例
+已知完整 Maven 坐标时，精确定位 sources jar 并读取类或方法源码。
+
+| 参数 | 必填 | 说明 |
+|------|:----:|------|
+| `--mode` | 是 | 固定为 `exact` |
+| `--group-id` | 是 | Maven group ID，例如 `cn.hutool` |
+| `--artifact-id` | 是 | Maven artifact ID，例如 `hutool-all` |
+| `--version` | 是 | 版本号，例如 `5.8.36` |
+| `--class-name` | 是 | 类名、完全限定类名或使用 `$` 分隔的内部类名 |
+| `--method-name` | 否 | 只输出指定方法；存在重载时输出所有同名方法 |
+| `--maven-repo` | 否 | Maven 仓库根目录，默认 `~/.m2/repository` |
+| `--gradle-repo` | 否 | Gradle 仓库根目录，默认 `~/.gradle/caches/modules-2/files-2.1` |
+| `--ignore-length-limit` | 否 | 忽略 500 行限制，强制输出完整源码 |
 
 ```bash
 java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=exact --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --method-name=fastSimpleUUID
 ```
 
-如果只知道类名，也可以直接这样传：
-
-```bash
-java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=fuzzy --class-name=IdUtil
-```
-
- `fuzzy` 模式会先在当前 Gradle / Maven 项目的依赖 jar 中定位目标 class，再反查对应的 sources jar。若只命中一个 sources jar，则直接读取源码；若命中多个，会提示改用更完整的类名。
-
-如果要读取内部类，可以这样传：
+读取内部类时，使用 `$` 分隔外部类与内部类：
 
 ```bash
 java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=exact --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil$Inner
 ```
 
-如果需要显式指定本地仓库目录，可以这样传：
+如果 sources jar 中存在多个同名类，使用完全限定类名。
+
+#### fuzzy 模式
+
+只知道类名时，从当前 Maven 或 Gradle 项目的依赖中定位来源 jar，再反查 sources jar。
+
+| 参数 | 必填 | 说明 |
+|------|:----:|------|
+| `--mode` | 是 | 固定为 `fuzzy` |
+| `--class-name` | 是 | 类名、完全限定类名或使用 `$` 分隔的内部类名 |
+| `--method-name` | 否 | 只输出指定方法；存在重载时输出所有同名方法 |
+| `--maven-repo` | 否 | Maven 仓库根目录，默认 `~/.m2/repository` |
+| `--gradle-repo` | 否 | Gradle 仓库根目录，默认 `~/.gradle/caches/modules-2/files-2.1` |
+| `--ignore-length-limit` | 否 | 忽略 500 行限制，强制输出完整源码 |
 
 ```bash
-java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --class-name=cn.hutool.core.util.IdUtil --maven-repo=C:/Users/yshs/.m2/repository --gradle-repo=C:/Users/yshs/.gradle/caches/modules-2/files-2.1
+java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=fuzzy --class-name=IdUtil
 ```
+
+`fuzzy` 模式若命中多个 sources jar，会提示改用 `exact` 模式和完整 Maven 坐标。
+
+#### search 模式
+
+在完整 Maven 坐标对应的唯一 sources jar 内逐行正则搜索文本。
+
+| 参数 | 必填 | 说明 |
+|------|:----:|------|
+| `--mode` | 是 | 固定为 `search` |
+| `--group-id` | 是 | Maven group ID，例如 `cn.hutool` |
+| `--artifact-id` | 是 | Maven artifact ID，例如 `hutool-all` |
+| `--version` | 是 | 版本号，例如 `5.8.36` |
+| `--pattern` | 是 | JVM 正则表达式 |
+| `--max-results` | 否 | 最大返回结果数，默认 `100` |
+| `--maven-repo` | 否 | Maven 仓库根目录，默认 `~/.m2/repository` |
+| `--gradle-repo` | 否 | Gradle 仓库根目录，默认 `~/.gradle/caches/modules-2/files-2.1` |
+
+```bash
+java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar --mode=search --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --pattern='create.*UUID' --max-results=100
+```
+
+`search` 模式不支持 fuzzy 定位，不会扫描当前项目的其他依赖。输出格式为 `文件路径:行号:命中行`，到达结果上限后立即停止。
