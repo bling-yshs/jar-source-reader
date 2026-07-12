@@ -65,6 +65,8 @@ java '-Dfile.encoding=UTF-8' -jar /path/to/this/skill/tool/jar-source-reader.jar
 
 `fuzzy` 模式若命中多个 sources jar，会提示改用 `exact` 模式和完整 Maven 坐标。
 
+如果发现同一个包存在多个版本，必须直接询问用户要使用哪个版本，不要尝试分析项目依赖关系来推断版本。
+
 #### search 模式
 
 在完整 Maven 坐标对应的唯一 sources jar 内逐行正则搜索文本。
