@@ -65,6 +65,11 @@ jobs:
           distribution: liberica
           java-version: '21'
 
+      - name: 安装 Bun (Set up Bun)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: 配置 Gradle (Setup Gradle)
         uses: gradle/actions/setup-gradle@v5
 
@@ -81,6 +86,9 @@ jobs:
           cp SKILL.md "$PACKAGE_ROOT/SKILL.md"
           cp build/libs/jar-source-reader.jar "$PACKAGE_ROOT/tool/jar-source-reader.jar"
           cp print-all-jar.gradle "$PACKAGE_ROOT/tool/print-all-jar.gradle"
+
+      - name: 运行真实项目测试 (Run Real Project Tests)
+        run: bun .github/scripts/verify-real-projects.ts dist/jar-source-reader
 
       - name: 生成发布压缩包 (Create Release Archive)
         run: |

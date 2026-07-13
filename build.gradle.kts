@@ -12,7 +12,6 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("com.github.javaparser:javaparser-core:3.28.0")
     implementation("com.github.ajalt.clikt:clikt:5.1.0")
-    testImplementation(kotlin("test"))
 }
 
 java {
@@ -34,8 +33,4 @@ tasks.shadowJar {
 
 tasks.jar {
     archiveClassifier.set("plain")
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
