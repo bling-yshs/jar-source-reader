@@ -154,15 +154,16 @@ java '-Dfile.encoding=UTF-8' -jar /path/to/jar-source-reader.jar --mode=fuzzy --
 | `--artifact-id` | ✅ | Maven Artifact ID，如 `hutool-all` |
 | `--version` | ✅ | 依赖版本号，如 `5.8.36` |
 | `--pattern` | ✅ | JVM 正则表达式 |
-| `--max-results` | ❌ | 最大返回结果数，默认 `100` |
+| `--max-count` | ❌ | 最大匹配行数，必须是正整数，默认 `100` |
+| `--context` | ❌ | 为每个匹配行附加的前后文行数，不能是负数，默认 `0` |
 | `--maven-repo` | ❌ | 指定 Maven 仓库根目录，默认 `~/.m2/repository` |
 | `--gradle-repo` | ❌ | 指定 Gradle 仓库根目录，默认 `~/.gradle/caches/modules-2/files-2.1` |
 
 ```bash
-java '-Dfile.encoding=UTF-8' -jar /path/to/jar-source-reader.jar --mode=search --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --pattern='create.*UUID' --max-results=100
+java '-Dfile.encoding=UTF-8' -jar /path/to/jar-source-reader.jar --mode=search --group-id=cn.hutool --artifact-id=hutool-all --version=5.8.36 --pattern='create.*UUID' --max-count=100 --context=3
 ```
 
-`search` 模式仅访问上述坐标对应的唯一 sources jar，不会执行 fuzzy 依赖扫描。结果以 `文件路径:行号:命中行` 的格式输出，到达上限后立即停止。
+`search` 模式仅访问上述坐标对应的唯一 sources jar，不会执行 fuzzy 依赖扫描。参考 `rg` 的输出格式，匹配行使用 `文件路径:行号:内容`，上下文行使用 `文件路径-行号-内容`，不连续的结果块使用 `--` 分隔。到达匹配行上限后立即停止。
 
 ## 📂 项目结构
 

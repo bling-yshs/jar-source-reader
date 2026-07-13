@@ -23,7 +23,7 @@ import kotlin.system.exitProcess
 
 private const val DEFAULT_LINE_LIMIT = 500
 
-private const val DEFAULT_MAX_RESULTS = 100
+private const val DEFAULT_MAX_COUNT = 100
 
 private const val MODE_EXACT = "exact"
 
@@ -89,8 +89,11 @@ fun readSource(command: SourceReadRequestParserCommand): String {
 
     if (mode == MODE_SEARCH) {
         val pattern = command.pattern ?: die("search 模式需要传入 --pattern")
-        if (command.maxResults <= 0) {
-            die("--max-results 必须是正整数")
+        if (command.maxCount <= 0) {
+            die("--max-count 必须是正整数")
+        }
+        if (command.context < 0) {
+            die("--context 不能是负数")
         }
 
         val repositoryContext = buildRepositoryContext(command)
@@ -113,7 +116,7 @@ fun readSource(command: SourceReadRequestParserCommand): String {
 
         return ZipFile(sourcesJars.single()).use { zip ->
             try {
-                searchSources(zip, pattern, command.maxResults)
+                searchSources(zip, pattern, command.maxCount, command.context)
             } catch (e: IllegalArgumentException) {
                 die(e.message ?: "源码搜索失败")
             }
@@ -530,8 +533,11 @@ class SourceReadRequestParserCommand : CliktCommand() {
     /** search 模式使用的正则表达式。 */
     val pattern: String? by option("--pattern")
 
-    /** search 模式的最大返回结果数。 */
-    val maxResults: Int by option("--max-results").int().default(DEFAULT_MAX_RESULTS)
+    /** search 模式的最大匹配行数。 */
+    val maxCount: Int by option("--max-count").int().default(DEFAULT_MAX_COUNT)
+
+    /** search 模式为每个匹配行附加的前后文行数。 */
+    val context: Int by option("--context").int().default(0)
 
     /** 可选的方法名。 */
     val methodName: String? by option("--method-name")
@@ -622,13 +628,15 @@ fun findSourcesJars(candidateDirs: List<File>): List<File> {
  *
  * @param zip 目标 sources jar
  * @param pattern JVM 正则表达式
- * @param maxResults 最大返回结果数
+ * @param maxCount 最大匹配行数
+ * @param context 每个匹配行附加的前后文行数
  * @return 包含文件路径、行号和命中行的搜索结果
  */
 fun searchSources(
     zip: ZipFile,
     pattern: String,
-    maxResults: Int,
+    maxCount: Int,
+    context: Int,
 ): String {
     val regex = try {
         Regex(pattern)
@@ -636,6 +644,7 @@ fun searchSources(
         throw IllegalArgumentException("无效的正则表达式: ${e.message}")
     }
     val results = mutableListOf<String>()
+    var matchCount = 0
     val entries = zip.entries()
     while (entries.hasMoreElements()) {
         val entry = entries.nextElement()
@@ -648,20 +657,47 @@ fun searchSources(
             continue
         }
 
-        val lines = contentBytes.toString(Charsets.UTF_8).lineSequence().iterator()
-        var lineNumber = 0
-        while (lines.hasNext()) {
-            val line = lines.next()
-            lineNumber++
-            if (!regex.containsMatchIn(line)) {
-                continue
+        val lines = contentBytes.toString(Charsets.UTF_8).lineSequence().toList()
+        val matchedLineIndexes = mutableListOf<Int>()
+        for (lineIndex in lines.indices) {
+            if (regex.containsMatchIn(lines[lineIndex])) {
+                matchedLineIndexes += lineIndex
+                matchCount++
+                if (matchCount >= maxCount) {
+                    break
+                }
             }
+        }
+        if (matchedLineIndexes.isEmpty()) {
+            continue
+        }
 
-            results += "${entry.name}:$lineNumber:$line"
-            if (results.size >= maxResults) {
-                return results.joinToString("\n") +
-                    "\n提示：搜索结果已达到 $maxResults 条上限，已停止继续搜索"
+        val matchedLineIndexSet = matchedLineIndexes.toSet()
+        val ranges = mutableListOf<IntRange>()
+        for (matchedLineIndex in matchedLineIndexes) {
+            val rangeStart = maxOf(0, matchedLineIndex - context)
+            val rangeEnd = minOf(lines.lastIndex, matchedLineIndex + context)
+            val previousRange = ranges.lastOrNull()
+            if (previousRange != null && rangeStart <= previousRange.last + 1) {
+                ranges[ranges.lastIndex] = previousRange.first..maxOf(previousRange.last, rangeEnd)
+            } else {
+                ranges += rangeStart..rangeEnd
             }
+        }
+
+        for (range in ranges) {
+            if (context > 0 && results.isNotEmpty()) {
+                results += "--"
+            }
+            for (lineIndex in range) {
+                val separator = if (lineIndex in matchedLineIndexSet) ":" else "-"
+                results += "${entry.name}$separator${lineIndex + 1}$separator${lines[lineIndex]}"
+            }
+        }
+
+        if (matchCount >= maxCount) {
+            return results.joinToString("\n") +
+                "\n提示：匹配行已达到 $maxCount 条上限，已停止继续搜索"
         }
     }
 
