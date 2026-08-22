@@ -67,23 +67,23 @@
 
 ## 📖 安装与使用
 
-### 1️⃣ 下载 Skill
+### 1️⃣ 一键安装 Skill
 
-从 [Releases](https://github.com/bling-yshs/jar-source-reader/releases/latest) 页面下载最新版本的压缩包。
+正式版直接从 `release` 分支安装：
 
-### 2️⃣ 放置到 Skills 目录
-
-将下载的文件解压后，放置到以下目录：
-
-```
-~/.claude/skills/jar-source-reader/
-├── SKILL.md                            # AI Skill 描述文件
-└── tool/
-    ├── jar-source-reader.jar           # 工具本体
-    └── print-all-jar.gradle            # Gradle 依赖扫描脚本
+```bash
+npx skills add https://github.com/bling-yshs/jar-source-reader#release
 ```
 
-### 3️⃣ 下载源代码（Source Jar）
+需要体验 `main` 分支最新构建时，可以安装 `build` 分支：
+
+```bash
+npx skills add https://github.com/bling-yshs/jar-source-reader#build
+```
+
+`build` 分支由 `main` 每次构建成功后自动刷新，`release` 分支由正式发布流程自动刷新。两个分支根目录都是可直接安装的完整 Skill。
+
+### 2️⃣ 下载源代码（Source Jar）
 
 在使用前，你需要确保目标依赖的 **sources jar** 已下载到本地仓库。
 
@@ -93,7 +93,7 @@
   <img height="500" src="assets/readme/download_sources.jpg" alt="下载源代码"/>
 </div>
 
-### 4️⃣ 向 AI 提供目标源码信息
+### 3️⃣ 向 AI 提供目标源码信息
 
 在与 AI 对话时，你需要向 AI 提供你想查看的目标类所在 jar 包的依赖坐标信息（groupId、artifactId、version），AI 就会自动调用此 Skill 读取源码。
 

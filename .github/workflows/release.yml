@@ -48,11 +48,8 @@ jobs:
             RELEASE_NAME="$TAG_NAME"
           fi
 
-          VERSION="${TAG_NAME#v}"
-
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: 检出代码 (Checkout)
         uses: actions/checkout@v6
@@ -86,6 +83,23 @@ jobs:
         run: |
           cd dist
           zip -r "jar-source-reader.zip" jar-source-reader
+
+      - name: 发布到 release 分支 (Publish Release Branch)
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+        run: |
+          PUBLISH_DIR="$(mktemp -d)"
+          git worktree add --detach "$PUBLISH_DIR" HEAD
+          git -C "$PUBLISH_DIR" switch --orphan release
+          git -C "$PUBLISH_DIR" rm -rf . >/dev/null 2>&1 || true
+          cp -a dist/jar-source-reader/. "$PUBLISH_DIR/"
+
+          git -C "$PUBLISH_DIR" config user.name "github-actions[bot]"
+          git -C "$PUBLISH_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$PUBLISH_DIR" add .
+          git -C "$PUBLISH_DIR" commit -m "release: $TAG_NAME"
+          git -C "$PUBLISH_DIR" push --force origin HEAD:release
+          git worktree remove --force "$PUBLISH_DIR"
 
       - name: 发布到 GitHub (Publish to GitHub)
         uses: ncipollo/release-action@v1

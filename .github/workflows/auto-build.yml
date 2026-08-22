@@ -5,19 +5,20 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
-    name: 构建并校验 Skill (Build and Verify Skill)
+    name: 构建并发布 Build Skill (Build and Publish Build Skill)
     runs-on: ubuntu-22.04
 
     steps:
       - name: 检出代码 (Checkout)
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: 安装 Java (Install Java)
         uses: actions/setup-java@v5
@@ -42,10 +43,17 @@ jobs:
           cp build/libs/jar-source-reader.jar "$PACKAGE_ROOT/tool/jar-source-reader.jar"
           cp print-all-jar.gradle "$PACKAGE_ROOT/tool/print-all-jar.gradle"
 
-      - name: 上传构建产物 (Upload Build Artifacts)
-        uses: actions/upload-artifact@v6
-        with:
-          name: jar-source-reader
-          path: |
-            dist/jar-source-reader
-          if-no-files-found: error
+      - name: 发布到 build 分支 (Publish Build Branch)
+        run: |
+          PUBLISH_DIR="$(mktemp -d)"
+          git worktree add --detach "$PUBLISH_DIR" HEAD
+          git -C "$PUBLISH_DIR" switch --orphan build
+          git -C "$PUBLISH_DIR" rm -rf . >/dev/null 2>&1 || true
+          cp -a dist/jar-source-reader/. "$PUBLISH_DIR/"
+
+          git -C "$PUBLISH_DIR" config user.name "github-actions[bot]"
+          git -C "$PUBLISH_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$PUBLISH_DIR" add .
+          git -C "$PUBLISH_DIR" commit -m "build: ${GITHUB_SHA::7}"
+          git -C "$PUBLISH_DIR" push --force origin HEAD:build
+          git worktree remove --force "$PUBLISH_DIR"
