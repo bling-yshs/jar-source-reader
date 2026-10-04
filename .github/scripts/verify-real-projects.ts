@@ -314,7 +314,9 @@ async function validateSkillPackage(packageDir: string): Promise<string> {
 }
 
 /**
- * 执行 Gradle 与 Maven 的真实项目测试。
+ * 使用独立项目目录执行 Gradle 与 Maven 的单依赖和多候选测试，隔离依赖列表缓存。
+ *
+ * @return 全部场景执行和临时目录清理完成后结束的 Promise
  */
 async function main(): Promise<void> {
     const packageArgument = Bun.argv[2];
@@ -328,7 +330,9 @@ async function main(): Promise<void> {
     const toolJar = await validateSkillPackage(packageDir);
     const tempDir = await mkdtemp(join(tmpdir(), "jar-source-reader-"));
     const gradleProject = join(tempDir, "gradle-project");
+    const gradleAmbiguousProject = join(tempDir, "gradle-ambiguous-project");
     const mavenProject = join(tempDir, "maven-project");
+    const mavenAmbiguousProject = join(tempDir, "maven-ambiguous-project");
     const gradleUserHome = join(tempDir, "gradle-user-home");
     const mavenRepo = join(tempDir, "maven-user-home", "repository");
     const emptyMavenRepo = join(tempDir, "empty-maven-repository");
@@ -344,7 +348,9 @@ async function main(): Promise<void> {
         await Bun.write(join(gradleProject, "gradlew"), Bun.file(join(workspaceDir, "gradlew")));
         await cp(join(workspaceDir, "gradle"), join(gradleProject, "gradle"), { recursive: true });
         await chmod(join(gradleProject, "gradlew"), 0o755);
+        await cp(gradleProject, gradleAmbiguousProject, { recursive: true });
         await cp(join(workspaceDir, "integration-tests", "maven"), mavenProject, { recursive: true });
+        await cp(mavenProject, mavenAmbiguousProject, { recursive: true });
         await Promise.all([
             mkdir(gradleUserHome, { recursive: true }),
             mkdir(mavenRepo, { recursive: true }),
@@ -374,11 +380,11 @@ async function main(): Promise<void> {
         const gradleAmbiguousRunOutput = await runSuccessfulCommand(
             "./gradlew",
             ["--no-daemon", "run", "downloadSources"],
-            { cwd: gradleProject, env: ambiguousEnvironment },
+            { cwd: gradleAmbiguousProject, env: ambiguousEnvironment },
         );
         assertContains(gradleAmbiguousRunOutput, "UUID=", "Gradle 冲突测试项目运行");
         await verifyAmbiguousCase(
-            gradleProject,
+            gradleAmbiguousProject,
             toolJar,
             emptyMavenRepo,
             gradleRepo,
@@ -386,7 +392,7 @@ async function main(): Promise<void> {
             ambiguousEnvironment,
         );
         await verifyMissingClassCase(
-            gradleProject,
+            gradleAmbiguousProject,
             toolJar,
             emptyMavenRepo,
             gradleRepo,
@@ -412,11 +418,11 @@ async function main(): Promise<void> {
         const mavenAmbiguousRunOutput = await runSuccessfulCommand(
             "mvn",
             ["--batch-mode", "--quiet", "verify", "dependency:resolve-sources", "exec:java"],
-            { cwd: mavenProject, env: ambiguousEnvironment },
+            { cwd: mavenAmbiguousProject, env: ambiguousEnvironment },
         );
         assertContains(mavenAmbiguousRunOutput, "UUID=", "Maven 冲突测试项目运行");
         await verifyAmbiguousCase(
-            mavenProject,
+            mavenAmbiguousProject,
             toolJar,
             mavenRepo,
             emptyGradleRepo,
@@ -424,7 +430,7 @@ async function main(): Promise<void> {
             ambiguousEnvironment,
         );
         await verifyMissingClassCase(
-            mavenProject,
+            mavenAmbiguousProject,
             toolJar,
             mavenRepo,
             emptyGradleRepo,
