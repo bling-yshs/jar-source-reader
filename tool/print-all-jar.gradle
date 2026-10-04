@@ -1,0 +1,45 @@
+gradle.rootProject { root ->
+    root.tasks.register("printAllJar") {
+        group = "jar-source-reader"
+        description = "Print external classpath jars only, one path per line"
+
+        doLast {
+            def configNames = [
+                    "runtimeClasspath",
+                    "compileClasspath",
+                    "testRuntimeClasspath",
+                    "testCompileClasspath"
+            ] as Set
+
+            def rootDirPath = root.projectDir.canonicalFile.absolutePath
+            def jars = new LinkedHashSet<File>()
+
+            root.allprojects.each { p ->
+                p.configurations.each { cfg ->
+                    if (!configNames.contains(cfg.name)) {
+                        return
+                    }
+
+                    if (!cfg.canBeResolved) {
+                        return
+                    }
+
+                    cfg.resolve().each { f ->
+                        if (f.isFile() && f.name.endsWith(".jar")) {
+                            def jar = f.canonicalFile
+                            def jarPath = jar.absolutePath
+
+                            if (!jarPath.startsWith(rootDirPath + File.separator)) {
+                                jars.add(jar)
+                            }
+                        }
+                    }
+                }
+            }
+
+            jars.each { jar ->
+                System.out.println(jar.absolutePath)
+            }
+        }
+    }
+}
