@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.types.int
 import com.github.javaparser.StaticJavaParser
 import com.github.javaparser.ast.CompilationUnit
 import com.github.javaparser.ast.body.FieldDeclaration
@@ -27,9 +28,13 @@ private const val DEFAULT_LINE_LIMIT = 500
 
 private const val DEPENDENCY_CACHE_TTL_MILLIS = 5 * 60 * 1000L
 
+private const val DEFAULT_MAX_COUNT = 100
+
 private const val MODE_EXACT = "exact"
 
 private const val MODE_FUZZY = "fuzzy"
+
+private const val MODE_SEARCH = "search"
 
 /** 目标类解析结果 */
 data class ClassTarget(
@@ -47,7 +52,7 @@ data class RepositoryContext(
 )
 
 /**
- * 读取命令行参数，定位 sources jar，并输出目标类源码或指定方法源码。
+ * 读取命令行参数，定位 sources jar，并输出源码读取或文本搜索结果。
  *
  * @param args 命令行参数
  */
@@ -76,24 +81,61 @@ fun parseCommandOrExit(args: Array<String>): SourceReadRequestParserCommand {
 }
 
 /**
- * 根据参数读取并返回目标源码文本。
+ * 根据运行模式返回目标源码或文本搜索结果。
  *
  * @param command 已解析的命令对象
- * @return 目标源码或骨架输出
+ * @return 目标源码、骨架或文本搜索结果
  */
 fun readSource(command: SourceReadRequestParserCommand): String {
     val mode = command.mode.lowercase()
-    if (mode != MODE_EXACT && mode != MODE_FUZZY) {
-        die("--mode 仅支持 exact 或 fuzzy")
+    if (mode != MODE_EXACT && mode != MODE_FUZZY && mode != MODE_SEARCH) {
+        die("--mode 仅支持 exact、fuzzy 或 search")
+    }
+
+    if (mode == MODE_SEARCH) {
+        val pattern = command.pattern ?: die("search 模式需要传入 --pattern")
+        if (command.maxCount <= 0) {
+            die("--max-count 必须是正整数")
+        }
+        if (command.context < 0) {
+            die("--context 不能是负数")
+        }
+
+        val repositoryContext = buildRepositoryContext(command)
+        val candidateDirs = repositoryCandidates(command, repositoryContext.home, repositoryContext.gradleHome)
+        val sourcesJars = findSourcesJars(candidateDirs)
+        if (sourcesJars.isEmpty()) {
+            die(
+                "未找到 sources jar，请先确保 sources jar 已下载，已查找路径:\n  " +
+                    candidateDirs.joinToString("\n  ") { it.absolutePath }
+            )
+        }
+        if (sourcesJars.size > 1) {
+            die(
+                buildString {
+                    appendLine("找到多个 sources jar，无法确定唯一搜索目标:")
+                    sourcesJars.forEach { sourcesJar -> appendLine("  ${sourcesJar.absolutePath}") }
+                }.trimEnd()
+            )
+        }
+
+        return ZipFile(sourcesJars.single()).use { zip ->
+            try {
+                searchSources(zip, pattern, command.maxCount, command.context)
+            } catch (e: IllegalArgumentException) {
+                die(e.message ?: "源码搜索失败")
+            }
+        }
     }
 
     if (mode == MODE_FUZZY) {
+        val className = command.className ?: die("fuzzy 模式需要传入 --class-name")
         val repositoryContext = buildRepositoryContext(command)
         val mavenRepoBase = repositoryContext.mavenRepoBase
         val gradleRepoBase = repositoryContext.gradleRepoBase
-        val exactClassFilePath = command.className.replace('.', '/') + ".class"
-        val simpleClassFilePath = command.className.substringAfterLast('.') + ".class"
-        val hasPackageName = command.className.substringBefore('$').contains('.')
+        val exactClassFilePath = className.replace('.', '/') + ".class"
+        val simpleClassFilePath = className.substringAfterLast('.') + ".class"
+        val hasPackageName = className.substringBefore('$').contains('.')
         val jarFiles = collectFuzzyDependencyJarFiles()
         val matchedSourcesByClassName = linkedMapOf<String, MutableSet<String>>()
 
@@ -237,11 +279,10 @@ fun readSource(command: SourceReadRequestParserCommand): String {
     }
 
     val repositoryContext = buildRepositoryContext(command)
+    val className = command.className ?: die("exact 模式需要传入 --class-name")
 
     val candidateDirs = repositoryCandidates(command, repositoryContext.home, repositoryContext.gradleHome)
-    val sourcesJar: File = candidateDirs
-        .filter { it.exists() }
-        .flatMap { it.walkTopDown().filter { file -> file.isFile && file.name.endsWith("-sources.jar") } }
+    val sourcesJar: File = findSourcesJars(candidateDirs)
         .firstOrNull()
         ?: die(
             "未找到 sources jar，请先确保 sources jar 已下载，已查找路径:\n  " +
@@ -250,7 +291,7 @@ fun readSource(command: SourceReadRequestParserCommand): String {
 
     ZipFile(sourcesJar).use { zip ->
         val classTarget = try {
-            resolveClassTarget(zip, command.className)
+            resolveClassTarget(zip, className)
         } catch (e: IllegalArgumentException) {
             die(e.message ?: "类名解析失败")
         }
@@ -261,7 +302,7 @@ fun readSource(command: SourceReadRequestParserCommand): String {
         return try {
             resolveOutput(
                 source = content,
-                className = command.className,
+                className = className,
                 methodName = command.methodName,
                 ignoreLengthLimit = command.ignoreLengthLimit,
             )
@@ -508,11 +549,20 @@ class SourceReadRequestParserCommand : CliktCommand() {
     /** 依赖版本号。 */
     val version: String? by option("--version")
 
-    /** 类搜索模式。 */
-    val mode: String by option("--mode").default(MODE_FUZZY)
+    /** 运行模式。 */
+    val mode: String by option("--mode").required()
 
     /** 类名或完全限定类名。 */
-    val className: String by option("--class-name").required()
+    val className: String? by option("--class-name")
+
+    /** search 模式使用的正则表达式。 */
+    val pattern: String? by option("--pattern")
+
+    /** search 模式的最大匹配行数。 */
+    val maxCount: Int by option("--max-count").int().default(DEFAULT_MAX_COUNT)
+
+    /** search 模式为每个匹配行附加的前后文行数。 */
+    val context: Int by option("--context").int().default(0)
 
     /** 可选的方法名。 */
     val methodName: String? by option("--method-name")
@@ -570,9 +620,9 @@ fun repositoryCandidates(
     userHome: String,
     gradleUserHome: String,
 ): List<File> {
-    val groupId = command.groupId ?: die("exact 模式需要传入 --group-id，或改用 Gradle classpath 搜索")
-    val artifactId = command.artifactId ?: die("exact 模式需要传入 --artifact-id，或改用 Gradle classpath 搜索")
-    val version = command.version ?: die("exact 模式需要传入 --version，或改用 Gradle classpath 搜索")
+    val groupId = command.groupId ?: die("exact/search 模式需要传入 --group-id")
+    val artifactId = command.artifactId ?: die("exact/search 模式需要传入 --artifact-id")
+    val version = command.version ?: die("exact/search 模式需要传入 --version")
     val groupPathMaven = groupId.replace('.', '/')
     val mavenRepoBase = command.mavenRepo ?: "$userHome/.m2/repository"
     val gradleRepoBase = command.gradleRepo
@@ -582,6 +632,104 @@ fun repositoryCandidates(
     val gradleDir = Paths.get(gradleRepoBase, groupId, artifactId, version).toFile()
 
     return listOf(mavenDir, gradleDir)
+}
+
+/**
+ * 在给定候选目录中查找已下载的 sources jar。
+ *
+ * @param candidateDirs Maven 和 Gradle 仓库候选目录
+ * @return 去重后的 sources jar 列表
+ */
+fun findSourcesJars(candidateDirs: List<File>): List<File> {
+    return candidateDirs
+        .filter { it.exists() }
+        .flatMap { it.walkTopDown().filter { file -> file.isFile && file.name.endsWith("-sources.jar") } }
+        .map { it.canonicalFile }
+        .distinct()
+}
+
+/**
+ * 在单个 sources jar 内逐行执行正则文本搜索。
+ *
+ * @param zip 目标 sources jar
+ * @param pattern JVM 正则表达式
+ * @param maxCount 最大匹配行数
+ * @param context 每个匹配行附加的前后文行数
+ * @return 包含文件路径、行号和命中行的搜索结果
+ */
+fun searchSources(
+    zip: ZipFile,
+    pattern: String,
+    maxCount: Int,
+    context: Int,
+): String {
+    val regex = try {
+        Regex(pattern)
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException("无效的正则表达式: ${e.message}")
+    }
+    val results = mutableListOf<String>()
+    var matchCount = 0
+    val entries = zip.entries()
+    while (entries.hasMoreElements()) {
+        val entry = entries.nextElement()
+        if (entry.isDirectory) {
+            continue
+        }
+
+        val contentBytes = zip.getInputStream(entry).use { it.readBytes() }
+        if (contentBytes.any { byte -> byte == 0.toByte() }) {
+            continue
+        }
+
+        val lines = contentBytes.toString(Charsets.UTF_8).lineSequence().toList()
+        val matchedLineIndexes = mutableListOf<Int>()
+        for (lineIndex in lines.indices) {
+            if (regex.containsMatchIn(lines[lineIndex])) {
+                matchedLineIndexes += lineIndex
+                matchCount++
+                if (matchCount >= maxCount) {
+                    break
+                }
+            }
+        }
+        if (matchedLineIndexes.isEmpty()) {
+            continue
+        }
+
+        val matchedLineIndexSet = matchedLineIndexes.toSet()
+        val ranges = mutableListOf<IntRange>()
+        for (matchedLineIndex in matchedLineIndexes) {
+            val rangeStart = maxOf(0, matchedLineIndex - context)
+            val rangeEnd = minOf(lines.lastIndex, matchedLineIndex + context)
+            val previousRange = ranges.lastOrNull()
+            if (previousRange != null && rangeStart <= previousRange.last + 1) {
+                ranges[ranges.lastIndex] = previousRange.first..maxOf(previousRange.last, rangeEnd)
+            } else {
+                ranges += rangeStart..rangeEnd
+            }
+        }
+
+        for (range in ranges) {
+            if (context > 0 && results.isNotEmpty()) {
+                results += "--"
+            }
+            for (lineIndex in range) {
+                val separator = if (lineIndex in matchedLineIndexSet) ":" else "-"
+                results += "${entry.name}$separator${lineIndex + 1}$separator${lines[lineIndex]}"
+            }
+        }
+
+        if (matchCount >= maxCount) {
+            return results.joinToString("\n") +
+                "\n提示：匹配行已达到 $maxCount 条上限，已停止继续搜索"
+        }
+    }
+
+    if (results.isEmpty()) {
+        throw IllegalArgumentException("未找到匹配内容: $pattern")
+    }
+    return results.joinToString("\n")
 }
 
 /**
