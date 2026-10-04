@@ -15,12 +15,17 @@ import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.body.TypeDeclaration
 import java.io.File
 import java.io.PrintStream
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 import kotlin.system.exitProcess
 
 private const val DEFAULT_LINE_LIMIT = 500
+
+private const val DEPENDENCY_CACHE_TTL_MILLIS = 5 * 60 * 1000L
 
 private const val MODE_EXACT = "exact"
 
@@ -296,22 +301,42 @@ fun parseCommand(args: Array<String>): SourceReadRequestParserCommand {
 }
 
 /**
- * 获取 fuzzy 模式需要扫描的项目依赖 jar。
+ * 获取 fuzzy 模式需要扫描的项目依赖 jar，按项目缓存 5 分钟，并通过文件锁协调并行收集。
  *
  * @return 当前项目依赖 jar 文件列表
  */
 fun collectFuzzyDependencyJarFiles(): List<File> {
-    val projectDir = File(".")
+    val projectDir = File(".").canonicalFile
     val gradlew = resolveGradleWrapperFile(projectDir)
-    if (gradlew.isFile) {
-        return collectGradleDependencyJarFiles(gradlew)
+    val buildTool = when {
+        gradlew.isFile -> "gradle"
+        File(projectDir, "pom.xml").isFile -> "maven"
+        else -> die("当前目录未找到 Gradle Wrapper 或 pom.xml，无法使用 fuzzy 模式")
     }
+    val projectKey = MessageDigest.getInstance("SHA-256")
+        .digest(projectDir.path.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+    val cacheDir = Paths.get(System.getProperty("user.home"), ".jar-source-reader")
+    Files.createDirectories(cacheDir)
+    val cacheFile = cacheDir.resolve("$buildTool-$projectKey.txt").toFile()
+    val lockFile = cacheDir.resolve("$buildTool-$projectKey.lock")
+    FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE).use { channel ->
+        channel.lock().use {
+            if (cacheFile.isFile &&
+                System.currentTimeMillis() - cacheFile.lastModified() < DEPENDENCY_CACHE_TTL_MILLIS
+            ) {
+                return cacheFile.readLines().map { File(it) }
+            }
 
-    if (File(projectDir, "pom.xml").isFile) {
-        return collectMavenDependencyJarFiles(projectDir)
+            val jarFiles = if (buildTool == "gradle") {
+                collectGradleDependencyJarFiles(gradlew)
+            } else {
+                collectMavenDependencyJarFiles(projectDir)
+            }
+            cacheFile.writeText(jarFiles.joinToString("\n") { it.absolutePath })
+            return jarFiles
+        }
     }
-
-    die("当前目录未找到 Gradle Wrapper 或 pom.xml，无法使用 fuzzy 模式")
 }
 
 /**
